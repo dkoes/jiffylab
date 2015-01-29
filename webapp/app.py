@@ -25,9 +25,9 @@ app.config['SECRET_KEY'] = 'devkey'
 
 CONTAINER_STORAGE = "/usr/local/etc/jiffylab/webapp/containers.json"
 SERVICES_HOST = '127.0.0.1'
-BASE_IMAGE = 'ptone/jiffylab-base'
+BASE_IMAGE = 'dkoes/pittbridge'
 
-initial_memory_budget = psutil.virtual_memory().free  # or can use available for vm
+initial_memory_budget = psutil.virtual_memory().available  # or can use available for vm
 
 # how much memory should each container be limited to
 CONTAINER_MEM_LIMIT = 1024 * 1024 * 100
@@ -55,16 +55,17 @@ class ContainerException(Exception):
 
 
 class UserForm(Form):
-    # TODO use HTML5 email input
-    email = TextField('Email', description='Please enter your email address.')
+    # TODO use HTML5 user input
+    user = TextField('UserID')
+    group = TextField('GroupID')
 
 
 @app.before_request
 def get_current_user():
     g.user = None
-    email = session.get('email')
-    if email is not None:
-        g.user = email
+    user = session.get('user')
+    if user is not None:
+        g.user = user
 
 _punct_re = re.compile(r'[\t !"#$%&\'()*\-/<=>?@\[\\\]^_`{|},.]+')
 
@@ -157,8 +158,8 @@ def add_portmap(cont):
         # service added
         # this should be done via ajax in the browser
         # this will loop and kill the server if it stalls on docker
-        ipy_wait = shellinabox_wait = True
-        while ipy_wait or shellinabox_wait:
+        ipy_wait = True
+        while ipy_wait:
             if ipy_wait:
                 try:
                     requests.head("http://{host}:{port}".format(
@@ -168,14 +169,6 @@ def add_portmap(cont):
                 except requests.exceptions.ConnectionError:
                     pass
 
-            if shellinabox_wait:
-                try:
-                    requests.head("http://{host}:{port}".format(
-                            host=app.config['SERVICES_HOST'],
-                            port=cont['portmap'][4200]))
-                    shellinabox_wait = False
-                except requests.exceptions.ConnectionError:
-                    pass
             time.sleep(.2)
             print 'waiting', app.config['SERVICES_HOST']
         return cont
@@ -189,18 +182,19 @@ def get_container(cont_id, all=False):
     return None
 
 
-def get_or_make_container(email):
+def get_or_make_container(user):
     # TODO catch ConnectionError
-    name = slugify(unicode(email)).lower()
+    name = slugify(unicode(user)).lower()
     container_id = lookup_container(name)
     if not container_id:
         image = get_image()
         cont = docker_client.create_container(
                 image['Id'],
-                None,
+                './start',
                 hostname="{user}box".format(user=name.split('-')[0]),
+                user='user',
                 mem_limit=CONTAINER_MEM_LIMIT,
-                ports=[8888, 4200],
+                ports=[8888], working_dir='/home/user'
                 )
 
         remember_container(name, cont['Id'])
@@ -214,12 +208,12 @@ def get_or_make_container(email):
         print 'recurse'
         # recurse
         # TODO DANGER- could have a over-recursion guard?
-        return get_or_make_container(email)
+        return get_or_make_container(user)
 
     if "Up" not in container['Status']:
         # if the container is not currently running, restart it
         check_memory()
-        docker_client.start(container_id, publish_all_ports=True)
+        docker_client.start(container_id, publish_all_ports=True,binds={'/home/dkoes/git/jiffylab/notebooks':{'bind':'/notebooks','ro':True}})
         # refresh status
         container = get_container(container_id)
     container = add_portmap(container)
@@ -237,8 +231,8 @@ def index():
             container = get_or_make_container(g.user)
         else:
             if form.validate_on_submit():
-                g.user = form.email.data
-                session['email'] = g.user
+                g.user = form.user.data
+                session['user'] = g.user
                 container = get_or_make_container(g.user)
         return render_template('index.html',
                 container=container,
@@ -246,19 +240,19 @@ def index():
                 servicehost=app.config['SERVICES_HOST'],
                 )
     except ContainerException as e:
-        session.pop('email', None)
+        session.pop('user', None)
         return render_template('error.html', error=e)
 
 
 @app.route('/logout')
 def logout():
     # remove the username from the session if it's there
-    session.pop('email', None)
+    session.pop('user', None)
     return redirect(url_for('index'))
 
 
 if '__main__' == __name__:
-    # app.run(debug=True, host='0.0.0.0')
+    app.run(debug=True, host='0.0.0.0')
     pass
 
 

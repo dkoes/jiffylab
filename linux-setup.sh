@@ -8,7 +8,7 @@
 # of the provisioning user by vagrant.
 
 sudo apt-get install -q -y curl
-curl https://get.docker.io | sudo sh -x
+#curl https://get.docker.io | sudo sh -x
 sudo apt-get install -y -q python-all-dev
 sudo apt-get install -y -q python-pip
 sudo apt-get install -y -q git
@@ -40,7 +40,6 @@ docker pull ptone/jiffylab-base
 sudo echo "
 start on startup
 pre-start script
-   iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 5000
 end script
 exec sudo -u jiffylabweb /usr/bin/python /usr/local/etc/jiffylab/webapp/server.py
 " > /etc/init/jiffylabweb.conf
