@@ -7,11 +7,11 @@ import re
 import threading
 import time
 from unicodedata import normalize
-
+import MySQLdb
 import docker
 from flask import Flask, render_template, session, g, redirect, url_for
 from flask.ext.bootstrap import Bootstrap
-from flask.ext.wtf import Form, TextField
+from flask.ext.wtf import Form, TextField, PasswordField, validators
 
 import psutil
 import requests
@@ -54,12 +54,36 @@ class ContainerException(Exception):
     pass
 
 
+
 class UserForm(Form):
-    # TODO use HTML5 user input
-    user = TextField('UserID')
-    group = TextField('GroupID')
+    user = TextField('UserID', [validators.Required()])
+    group = PasswordField('GroupID', [validators.Required()])
 
+    def __init__(self, *args, **kwargs):
+        Form.__init__(self, *args, **kwargs)
 
+    def validate(self):
+        rv = Form.validate(self)
+        if not rv:
+            return False       
+        
+        user = self.user.data 
+        group = self.group.data
+        
+        conn = MySQLdb.connect (host = "localhost",user = "pittbridge",db="pittbridge")
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM groupids WHERE groupid = %s", group)
+        res = cursor.fetchall()
+        if not res:
+            self.group.errors.append('Invalid group id')
+            return False
+        #keep track of users
+        cursor.execute("REPLACE INTO users (userid, groupid) VALUES(%s,%s)",(user,group))
+        conn.commit()
+        print user,group
+        return True
+    
+    
 @app.before_request
 def get_current_user():
     g.user = None

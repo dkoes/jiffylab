@@ -30,7 +30,8 @@ sudo pip install -r /usr/local/etc/jiffylab/webapp/requirements.txt
 sudo groupadd docker
 sudo useradd -g docker jiffylabweb
 
-sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 5000
+#the following line is evil, do not uncomment     
+#sudo iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 5000
 sudo chown -R jiffylabweb /usr/local/etc/jiffylab/webapp/
 
 docker pull ptone/jiffylab-base
